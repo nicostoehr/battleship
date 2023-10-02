@@ -142,7 +142,7 @@ def host_conn_setup(o_socket):
         own_port = int(input("Run game at port: "))
         o_socket.bind(("", own_port))
         print("===========================================")
-        print(f"Game ist hosted on {socket.gethostbyname(socket.gethostname())}:{own_port}")
+        print(f"Game ist hosted on Port:{own_port}")
         print("===========================================")
 
         while True:
