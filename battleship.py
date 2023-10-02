@@ -123,57 +123,57 @@ def print_board(own_dict, riv_dict=None):
 
 
 # DONE
-def host_conn_setup():
+def host_conn_setup(o_socket):
     mode_chosen = False
-    conn_mode = ""
+    c_mode = ""
 
     while not mode_chosen:
         os.system("cls")
-        conn_mode = input("Host (h) or Join (j) game: ").strip().lower()
-        if conn_mode == "h":
+        c_mode = input("Host (h) or Join (j) game: ").strip().lower()
+        if c_mode == "h":
             mode_chosen = True
-        elif conn_mode == "j":
+        elif c_mode == "j":
             mode_chosen = True
 
-    if conn_mode == "h":
+    if c_mode == "h":
         print("===========================================")
         print("Host Mode")
         print("===========================================")
         own_port = int(input("Run game at port: "))
-        own_socket.bind(("127.0.0.1", own_port))
+        o_socket.bind(("", own_port))
         print("===========================================")
         print(f"Game ist hosted on {socket.gethostbyname(socket.gethostname())}:{own_port}")
         print("===========================================")
 
         while True:
-            rec_data, rec_f_addr = own_socket.recvfrom(1024)
+            rec_data, rec_f_addr = o_socket.recvfrom(1024)
             if rec_data.decode("utf-8") == "PySchiffeVersenkenByNicoConnReq":
                 break
-        own_socket.sendto("PySchiffeVersenkenByNicoConnAcc".encode("utf-8"), rec_f_addr)
+        o_socket.sendto("PySchiffeVersenkenByNicoConnAcc".encode("utf-8"), rec_f_addr)
         print("Connected to client!")
 
-        return conn_mode, rec_f_addr
+        return c_mode, rec_f_addr
 
-    elif conn_mode == "j":
+    elif c_mode == "j":
         print("===========================================")
         print("Join Host")
         print("===========================================")
         own_port = int(input("Run game at port: "))
-        own_socket.bind(("", own_port))
+        o_socket.bind(("", own_port))
         print("===========================================")
-        conn_addr = input("Host IP: ")
+        conn_addr = input("Host IP: ").strip()
         conn_port = int(input("Host port: "))
         print("===========================================")
 
-        own_socket.sendto("PySchiffeVersenkenByNicoConnReq".encode("utf-8"), (conn_addr, conn_port))
+        o_socket.sendto("PySchiffeVersenkenByNicoConnReq".encode("utf-8"), (conn_addr, conn_port))
 
         while True:
-            rec_data, rec_f_addr = own_socket.recvfrom(1024)
+            rec_data, rec_f_addr = o_socket.recvfrom(1024)
             if rec_data.decode("utf-8") == "PySchiffeVersenkenByNicoConnAcc":
                 break
         print("Connected to host!")
 
-        return conn_mode, rec_f_addr
+        return c_mode, rec_f_addr
 
 
 # DONE
@@ -233,18 +233,18 @@ def fit_ship(ship_dict, try_pos, ship_type):
 
 
 # DONE
-def send_ships(own_s, send_addr_ships):
+def send_ships(own_shipd, send_addr_ships, own_s_sock):
     ships_send_s = "ships"
-    for ship, pos in own_s.items():
+    for ship, pos in own_shipd.items():
         if len(ship) == 2 and pos != "":
             ships_send_s += ","+ship+":"+pos
-    own_socket.sendto(ships_send_s.encode("utf-8"), send_addr_ships)
+    own_s_sock.sendto(ships_send_s.encode("utf-8"), send_addr_ships)
 
 
 # DONE
-def rec_ships():
+def rec_ships(rs_socket):
     riv_s: dict[str, str | list] = {}
-    re_data, re_f_addr = own_socket.recvfrom(1024)
+    re_data, re_f_addr = rs_socket.recvfrom(1024)
     rec_array = re_data.decode("utf-8").split(",")
     print(rec_array)
     for rec_entry in rec_array:
@@ -256,7 +256,7 @@ def rec_ships():
 
 
 # DONE
-def setup_ships(conn_mode_setup, send_addr_setup):
+def setup_ships(conn_mode_setup, send_addr_setup, setup_socket):
     os.system("cls")
     own_ship_dict: dict[str, str | list] = {
         "s1": "",
@@ -299,15 +299,15 @@ def setup_ships(conn_mode_setup, send_addr_setup):
             else: false_set = True
 
     # GET RIV SHIPS
-    own_socket.sendto((conn_mode_setup + "SetupDone").encode("utf-8"), send_addr_setup)
+    setup_socket.sendto((conn_mode_setup + "SetupDone").encode("utf-8"), send_addr_setup)
     os.system("cls")
     print_board(own_ship_dict)
     print("Waiting for other player to finish setup...")
-    r_data, rec_f_addr = own_socket.recvfrom(1024)
+    r_data, rec_f_addr = setup_socket.recvfrom(1024)
 
     if r_data.decode("utf-8") == "hSetupDone":
-        riv_ship_dict = rec_ships()
-        send_ships(own_ship_dict, send_addr_setup)
+        riv_ship_dict = rec_ships(setup_socket)
+        send_ships(own_ship_dict, send_addr_setup, setup_socket)
         own_ship_dict["misses"] = []
         riv_ship_dict["misses"] = []
         own_ship_dict["hits"] = []
@@ -315,8 +315,8 @@ def setup_ships(conn_mode_setup, send_addr_setup):
         return own_ship_dict, riv_ship_dict
 
     elif r_data.decode("utf-8") == "jSetupDone":
-        send_ships(own_ship_dict, send_addr_setup)
-        riv_ship_dict = rec_ships()
+        send_ships(own_ship_dict, send_addr_setup, setup_socket)
+        riv_ship_dict = rec_ships(setup_socket)
         own_ship_dict["misses"] = []
         riv_ship_dict["misses"] = []
         own_ship_dict["hits"] = []
@@ -393,10 +393,10 @@ if __name__ == "__main__":
     own_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # DEFINE CONN MODE
-    conn_mode, send_addr = host_conn_setup()
+    conn_mode, send_addr = host_conn_setup(own_socket)
 
     # DEFINE SHIP POSITIONS
-    own_ships, riv_ships = setup_ships(conn_mode, send_addr)
+    own_ships, riv_ships = setup_ships(conn_mode, send_addr, own_socket)
 
     # BEGIN GAME
     hosts_turn = True
